@@ -104,9 +104,33 @@ new MutationObserver(function(){var newDark=document.body.classList.contains('vs
     }
 
     private _footer(): string {
+        // The heartbeat file is in the same directory as the script.
+        // We use sync XHR (allowed in renderer since we're in a script tag,
+        // not a module) to check the file before starting.
+        // Max age: 48 hours (172800000ms) — enough to survive normal restarts
+        // but catches disabled extensions reliably.
         return `
-if(document.readyState==='complete')setTimeout(start,3000);
-else window.addEventListener('load',function(){setTimeout(start,3000);});
+var _heartbeatMaxAge=172800000;
+function checkHeartbeat(){
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET','./ag-sdk-heartbeat?t='+Date.now(),false);
+    xhr.send();
+    if(xhr.status!==200)return false;
+    var ts=parseInt(xhr.responseText,10);
+    if(isNaN(ts))return false;
+    return(Date.now()-ts)<_heartbeatMaxAge;
+  }catch(e){return false;}
+}
+function boot(){
+  if(!checkHeartbeat()){
+    console.log('[AG SDK] Heartbeat missing or stale — extension disabled? Skipping.');
+    return;
+  }
+  if(document.readyState==='complete')setTimeout(start,3000);
+  else window.addEventListener('load',function(){setTimeout(start,3000);});
+}
+boot();
 })();`;
     }
 

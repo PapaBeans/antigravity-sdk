@@ -163,6 +163,9 @@ export class AntigravitySDK implements IDisposable {
             log.warn('LS bridge not available (headless API disabled, command fallback active)');
         }
 
+        // Refresh integration heartbeat (so renderer script knows extension is active)
+        this.integration.signalActive();
+
         this._initialized = true;
         log.info('SDK initialized successfully');
     }
@@ -178,7 +181,7 @@ export class AntigravitySDK implements IDisposable {
      * Get the SDK version.
      */
     get version(): string {
-        return '0.3.0';
+        return '1.1.0';
     }
 
     /**

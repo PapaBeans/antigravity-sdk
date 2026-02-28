@@ -19,6 +19,9 @@ const MARKER_END = '<!-- /X-Ray SDK Integration -->';
 /** Default script filename */
 const SCRIPT_FILENAME = 'ag-sdk-integrate.js';
 
+/** Heartbeat marker filename */
+const HEARTBEAT_FILENAME = 'ag-sdk-heartbeat';
+
 /**
  * Manages patching/unpatching of Antigravity's workbench.html.
  */
@@ -26,6 +29,7 @@ export class WorkbenchPatcher {
     private readonly _workbenchDir: string;
     private readonly _workbenchHtml: string;
     private readonly _scriptPath: string;
+    private readonly _heartbeatPath: string;
 
     constructor() {
         // Resolve Antigravity install path
@@ -44,6 +48,7 @@ export class WorkbenchPatcher {
         );
         this._workbenchHtml = path.join(this._workbenchDir, 'workbench.html');
         this._scriptPath = path.join(this._workbenchDir, SCRIPT_FILENAME);
+        this._heartbeatPath = path.join(this._workbenchDir, HEARTBEAT_FILENAME);
     }
 
     /**
@@ -131,6 +136,41 @@ export class WorkbenchPatcher {
         } catch {
             // Ignore
         }
+    }
+
+    /**
+     * Write/refresh the heartbeat marker file.
+     *
+     * The generated script checks this file's modification time
+     * to determine if the extension is still active. If the file
+     * is missing or stale, the script will not start.
+     */
+    writeHeartbeat(): void {
+        try {
+            fs.writeFileSync(this._heartbeatPath, Date.now().toString(), 'utf8');
+        } catch {
+            // Ignore — workbench dir may not be writable
+        }
+    }
+
+    /**
+     * Remove the heartbeat marker file.
+     */
+    removeHeartbeat(): void {
+        try {
+            if (fs.existsSync(this._heartbeatPath)) {
+                fs.unlinkSync(this._heartbeatPath);
+            }
+        } catch {
+            // Ignore
+        }
+    }
+
+    /**
+     * Get the path to the heartbeat file.
+     */
+    getHeartbeatPath(): string {
+        return this._heartbeatPath;
     }
 
     /**

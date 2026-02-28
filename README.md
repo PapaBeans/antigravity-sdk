@@ -101,6 +101,9 @@ ui.enableAutoRepair(); // Survives Antigravity updates
 | `DROPDOWN_MENU` | 3-dot overflow menu | Export, settings, debug tools |
 | `CHAT_TITLE` | Conversation title | Rename, bookmark on interaction |
 
+> [!NOTE]
+> The integration script runs in the renderer process, independent of the extension. The SDK uses a **heartbeat mechanism** to prevent orphaned integrations: `sdk.initialize()` refreshes a timestamp marker, and the script silently exits if the marker is stale (48h). Disabling your extension will automatically stop the integration on the next IDE restart after the grace period.
+
 ### Conversation Management
 
 Full control over Cascade conversations — list, create, switch, send messages, and manage agent steps.

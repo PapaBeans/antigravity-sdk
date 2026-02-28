@@ -267,9 +267,10 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
 
         const script = this.build();
         this._patcher.install(script);
+        this._patcher.writeHeartbeat();
 
         log.info(
-            `Installed integration (${this._configs.size} points) → ${this._patcher.getScriptPath()}`,
+            `Installed integration (${this._configs.size} points) -> ${this._patcher.getScriptPath()}`,
         );
         log.info('Restart Antigravity to apply changes');
     }
@@ -281,6 +282,7 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
      */
     async uninstall(): Promise<void> {
         this._patcher.uninstall();
+        this._patcher.removeHeartbeat();
         this.disableAutoRepair();
         log.info('Uninstalled integration. Restart Antigravity to apply.');
     }
@@ -290,6 +292,30 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
      */
     isInstalled(): boolean {
         return this._patcher.isInstalled();
+    }
+
+    /**
+     * Signal that the extension is active.
+     *
+     * Call this in your extension's `activate()` function.
+     * The integration script checks for this heartbeat;
+     * if it's missing or stale (>48h), the script won't start.
+     *
+     * This prevents orphaned integrations from running after
+     * an extension is disabled or uninstalled.
+     *
+     * @example
+     * ```typescript
+     * export function activate(context: vscode.ExtensionContext) {
+     *   const sdk = new AntigravitySDK(context);
+     *   sdk.integration.signalActive();
+     *   // ...
+     * }
+     * ```
+     */
+    signalActive(): void {
+        this._patcher.writeHeartbeat();
+        log.debug('Heartbeat refreshed');
     }
 
     // ─── Dynamic Update ─────────────────────────────────────────────────
