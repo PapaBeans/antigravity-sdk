@@ -1,20 +1,20 @@
 /**
- * Injection Manager — Public API for UI injection into Agent View.
+ * Integration Manager — Public API for UI integration into Agent View.
  *
  * Orchestrates ScriptGenerator and WorkbenchPatcher to provide
  * a clean, developer-friendly API.
  *
- * @module injection/injection-manager
+ * @module integration/integration-manager
  *
  * @example
  * ```typescript
- * import { InjectionManager, InjectionPoint } from 'antigravity-sdk';
+ * import { IntegrationManager, IntegrationPoint } from 'antigravity-sdk';
  *
- * const injector = new InjectionManager();
+ * const integrator = new IntegrationManager();
  *
- * injector.register({
+ * integrator.register({
  *   id: 'myStats',
- *   point: InjectionPoint.TOP_BAR,
+ *   point: IntegrationPoint.TOP_BAR,
  *   icon: '📊',
  *   tooltip: 'Show Stats',
  *   toast: {
@@ -23,13 +23,13 @@
  *   },
  * });
  *
- * injector.register({
+ * integrator.register({
  *   id: 'turnInfo',
- *   point: InjectionPoint.TURN_METADATA,
+ *   point: IntegrationPoint.TURN_METADATA,
  *   metrics: ['turnNumber', 'userCharCount', 'separator', 'aiCharCount', 'codeBlocks'],
  * });
  *
- * await injector.install();
+ * await integrator.install();
  * // Restart Antigravity to see changes
  * ```
  */
@@ -38,36 +38,36 @@ import * as fs from 'fs';
 import { IDisposable } from '../core/disposable';
 import { Logger } from '../core/logger';
 import {
-    InjectionConfig,
-    InjectionPoint,
-    IInjectionManager,
-    IButtonInjection,
-    ITurnMetaInjection,
-    IUserBadgeInjection,
-    IBotActionInjection,
-    IDropdownInjection,
-    ITitleInjection,
+    IntegrationConfig,
+    IntegrationPoint,
+    IIntegrationManager,
+    IButtonIntegration,
+    ITurnMetaIntegration,
+    IUserBadgeIntegration,
+    IBotActionIntegration,
+    IDropdownIntegration,
+    ITitleIntegration,
     IToastConfig,
 } from './types';
 import { ScriptGenerator } from './script-generator';
 import { WorkbenchPatcher } from './workbench-patcher';
 
-const log = new Logger('InjectionManager');
+const log = new Logger('IntegrationManager');
 
 /**
- * Manages UI injections into the Antigravity Agent View.
+ * Manages UI integrations into the Antigravity Agent View.
  *
- * Provides a declarative API to register injection points,
+ * Provides a declarative API to register integration points,
  * generates a self-contained JavaScript file, and installs it
  * into Antigravity's workbench.
  *
- * Phase 4 features:
+ * Features:
  * - **Theme-aware**: Adapts to dark/light mode automatically
  * - **Auto-repair**: Watches workbench.html and re-patches after updates
  * - **Dynamic update**: Re-generate script without re-patching workbench.html
  */
-export class InjectionManager implements IInjectionManager, IDisposable {
-    private readonly _configs: Map<string, InjectionConfig> = new Map();
+export class IntegrationManager implements IIntegrationManager, IDisposable {
+    private readonly _configs: Map<string, IntegrationConfig> = new Map();
     private readonly _generator = new ScriptGenerator();
     private readonly _patcher = new WorkbenchPatcher();
     private _watcher: fs.FSWatcher | null = null;
@@ -76,39 +76,39 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     // ─── Registration ──────────────────────────────────────────────────
 
     /**
-     * Register a single injection point.
+     * Register a single integration point.
      *
-     * @throws If an injection with the same ID already exists
+     * @throws If an integration with the same ID already exists
      */
-    register(config: InjectionConfig): void {
+    register(config: IntegrationConfig): void {
         if (this._configs.has(config.id)) {
-            throw new Error(`Injection '${config.id}' is already registered`);
+            throw new Error(`Integration '${config.id}' is already registered`);
         }
         this._configs.set(config.id, config);
-        log.debug(`Registered injection: ${config.id} (${config.point})`);
+        log.debug(`Registered integration: ${config.id} (${config.point})`);
     }
 
     /**
-     * Register multiple injection points at once.
+     * Register multiple integration points at once.
      */
-    registerMany(configs: InjectionConfig[]): void {
+    registerMany(configs: IntegrationConfig[]): void {
         for (const c of configs) {
             this.register(c);
         }
     }
 
     /**
-     * Remove a registered injection by ID.
+     * Remove a registered integration by ID.
      */
     unregister(id: string): void {
         this._configs.delete(id);
-        log.debug(`Unregistered injection: ${id}`);
+        log.debug(`Unregistered integration: ${id}`);
     }
 
     /**
-     * Get all registered injections.
+     * Get all registered integrations.
      */
-    getRegistered(): ReadonlyArray<InjectionConfig> {
+    getRegistered(): ReadonlyArray<IntegrationConfig> {
         return Array.from(this._configs.values());
     }
 
@@ -120,11 +120,11 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     addTopBarButton(id: string, icon: string, tooltip?: string, toast?: IToastConfig): this {
         this.register({
             id,
-            point: InjectionPoint.TOP_BAR,
+            point: IntegrationPoint.TOP_BAR,
             icon,
             tooltip,
             toast,
-        } as IButtonInjection);
+        } as IButtonIntegration);
         return this;
     }
 
@@ -134,11 +134,11 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     addTopRightButton(id: string, icon: string, tooltip?: string, toast?: IToastConfig): this {
         this.register({
             id,
-            point: InjectionPoint.TOP_RIGHT,
+            point: IntegrationPoint.TOP_RIGHT,
             icon,
             tooltip,
             toast,
-        } as IButtonInjection);
+        } as IButtonIntegration);
         return this;
     }
 
@@ -148,11 +148,11 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     addInputButton(id: string, icon: string, tooltip?: string, toast?: IToastConfig): this {
         this.register({
             id,
-            point: InjectionPoint.INPUT_AREA,
+            point: IntegrationPoint.INPUT_AREA,
             icon,
             tooltip,
             toast,
-        } as IButtonInjection);
+        } as IButtonIntegration);
         return this;
     }
 
@@ -162,36 +162,36 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     addBottomIcon(id: string, icon: string, tooltip?: string, toast?: IToastConfig): this {
         this.register({
             id,
-            point: InjectionPoint.BOTTOM_ICONS,
+            point: IntegrationPoint.BOTTOM_ICONS,
             icon,
             tooltip,
             toast,
-        } as IButtonInjection);
+        } as IButtonIntegration);
         return this;
     }
 
     /**
      * Enable per-turn metadata display.
      */
-    addTurnMetadata(id: string, metrics: ITurnMetaInjection['metrics'], clickable = true): this {
+    addTurnMetadata(id: string, metrics: ITurnMetaIntegration['metrics'], clickable = true): this {
         this.register({
             id,
-            point: InjectionPoint.TURN_METADATA,
+            point: IntegrationPoint.TURN_METADATA,
             metrics,
             clickable,
-        } as ITurnMetaInjection);
+        } as ITurnMetaIntegration);
         return this;
     }
 
     /**
      * Add character count badges to user messages.
      */
-    addUserBadges(id: string, display: IUserBadgeInjection['display'] = 'charCount'): this {
+    addUserBadges(id: string, display: IUserBadgeIntegration['display'] = 'charCount'): this {
         this.register({
             id,
-            point: InjectionPoint.USER_BADGE,
+            point: IntegrationPoint.USER_BADGE,
             display,
-        } as IUserBadgeInjection);
+        } as IUserBadgeIntegration);
         return this;
     }
 
@@ -201,11 +201,11 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     addBotAction(id: string, icon: string, label: string, toast?: IToastConfig): this {
         this.register({
             id,
-            point: InjectionPoint.BOT_ACTION,
+            point: IntegrationPoint.BOT_ACTION,
             icon,
             label,
             toast,
-        } as IBotActionInjection);
+        } as IBotActionIntegration);
         return this;
     }
 
@@ -215,42 +215,42 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     addDropdownItem(id: string, label: string, icon?: string, toast?: IToastConfig, separator = false): this {
         this.register({
             id,
-            point: InjectionPoint.DROPDOWN_MENU,
+            point: IntegrationPoint.DROPDOWN_MENU,
             label,
             icon,
             toast,
             separator,
-        } as IDropdownInjection);
+        } as IDropdownIntegration);
         return this;
     }
 
     /**
      * Enable chat title interaction.
      */
-    addTitleInteraction(id: string, interaction: ITitleInjection['interaction'] = 'dblclick', hint?: string, toast?: IToastConfig): this {
+    addTitleInteraction(id: string, interaction: ITitleIntegration['interaction'] = 'dblclick', hint?: string, toast?: IToastConfig): this {
         this.register({
             id,
-            point: InjectionPoint.CHAT_TITLE,
+            point: IntegrationPoint.CHAT_TITLE,
             interaction,
             hint,
             toast,
-        } as ITitleInjection);
+        } as ITitleIntegration);
         return this;
     }
 
     // ─── Build & Install ───────────────────────────────────────────────
 
     /**
-     * Generate the injection script from all registered configs.
+     * Generate the integration script from all registered configs.
      *
      * @returns Complete JavaScript code as a string
      */
     build(): string {
         const configs = Array.from(this._configs.values());
         if (configs.length === 0) {
-            throw new Error('No injection points registered');
+            throw new Error('No integration points registered');
         }
-        log.info(`Building script for ${configs.length} injection(s)`);
+        log.info(`Building script for ${configs.length} integration(s)`);
         return this._generator.generate(configs);
     }
 
@@ -269,35 +269,35 @@ export class InjectionManager implements IInjectionManager, IDisposable {
         this._patcher.install(script);
 
         log.info(
-            `Installed injection (${this._configs.size} points) → ${this._patcher.getScriptPath()}`,
+            `Installed integration (${this._configs.size} points) → ${this._patcher.getScriptPath()}`,
         );
         log.info('Restart Antigravity to apply changes');
     }
 
     /**
-     * Remove the injection from workbench.html.
+     * Remove the integration from workbench.html.
      *
      * ⚠️ Requires Antigravity restart to take effect.
      */
     async uninstall(): Promise<void> {
         this._patcher.uninstall();
         this.disableAutoRepair();
-        log.info('Uninstalled injection. Restart Antigravity to apply.');
+        log.info('Uninstalled integration. Restart Antigravity to apply.');
     }
 
     /**
-     * Check if an injection is currently installed.
+     * Check if an integration is currently installed.
      */
     isInstalled(): boolean {
         return this._patcher.isInstalled();
     }
 
-    // ─── Phase 4: Dynamic Update ───────────────────────────────────────
+    // ─── Dynamic Update ─────────────────────────────────────────────────
 
     /**
-     * Re-generate and overwrite the injection script without re-patching workbench.html.
+     * Re-generate and overwrite the integration script without re-patching workbench.html.
      *
-     * Use this after registering/unregistering injection points at runtime.
+     * Use this after registering/unregistering integration points at runtime.
      * The script file is updated in-place; the next Antigravity restart
      * will pick up the changes. workbench.html <script> tag is unchanged.
      *
@@ -305,7 +305,7 @@ export class InjectionManager implements IInjectionManager, IDisposable {
      */
     updateScript(): boolean {
         if (!this._patcher.isInstalled()) {
-            log.warn('Cannot update script — injection is not installed');
+            log.warn('Cannot update script — integration is not installed');
             return false;
         }
 
@@ -320,22 +320,22 @@ export class InjectionManager implements IInjectionManager, IDisposable {
         }
     }
 
-    // ─── Phase 4: Auto-Repair ──────────────────────────────────────────
+    // ─── Auto-Repair ────────────────────────────────────────────────────
 
     /**
      * Enable auto-repair: watches workbench.html for changes
-     * and automatically re-applies the injection patch.
+     * and automatically re-applies the integration patch.
      *
      * This handles Antigravity updates that overwrite workbench.html.
      * The watcher detects when the file changes and re-patches it
-     * if the injection marker is missing.
+     * if the integration marker is missing.
      *
      * @example
      * ```typescript
-     * const injector = new InjectionManager();
-     * injector.useXRayPreset();
-     * await injector.install();
-     * injector.enableAutoRepair(); // Survive Antigravity updates
+     * const integrator = new IntegrationManager();
+     * integrator.useXRayPreset();
+     * await integrator.install();
+     * integrator.enableAutoRepair(); // Survive Antigravity updates
      * ```
      */
     enableAutoRepair(): void {
@@ -389,7 +389,7 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     private _tryRepair(): void {
         try {
             if (this._patcher.isInstalled()) {
-                log.debug('Auto-repair: injection still present, no action needed');
+                log.debug('Auto-repair: integration still present, no action needed');
                 return;
             }
 
@@ -398,10 +398,10 @@ export class InjectionManager implements IInjectionManager, IDisposable {
                 return;
             }
 
-            log.info('Auto-repair: injection lost (Antigravity update?), re-patching...');
+            log.info('Auto-repair: integration lost (Antigravity update?), re-patching...');
             const script = this.build();
             this._patcher.install(script);
-            log.info('Auto-repair: ✅ Re-patched successfully. Restart Antigravity.');
+            log.info('Auto-repair: re-patched successfully. Restart Antigravity.');
         } catch (err) {
             log.error('Auto-repair failed', err);
         }
@@ -410,7 +410,7 @@ export class InjectionManager implements IInjectionManager, IDisposable {
     // ─── Preset ────────────────────────────────────────────────────────
 
     /**
-     * Register the X-Ray preset — a complete demo of all 9 injection points.
+     * Register the X-Ray preset — a complete demo of all 9 integration points.
      * Useful for testing and as a reference implementation.
      */
     useXRayPreset(): this {
@@ -507,4 +507,3 @@ export class InjectionManager implements IInjectionManager, IDisposable {
         this._configs.clear();
     }
 }
-

@@ -43,7 +43,7 @@ import { StateBridge } from './transport/state-bridge';
 import { EventMonitor } from './transport/event-monitor';
 import { LSBridge } from './transport/ls-bridge';
 import { CascadeManager } from './cascade/cascade-manager';
-import { InjectionManager } from './injection/injection-manager';
+import { IntegrationManager } from './integration/integration-manager';
 
 const log = new Logger('SDK');
 
@@ -87,8 +87,8 @@ export class AntigravitySDK implements IDisposable {
     /** Event monitor for watching state changes */
     public readonly monitor: EventMonitor;
 
-    /** Injection manager for Agent View UI customization */
-    public readonly injection: InjectionManager;
+    /** Integration manager for Agent View UI customization */
+    public readonly integration: IntegrationManager;
 
     /**
      * Language Server bridge for headless cascade operations.
@@ -121,7 +121,7 @@ export class AntigravitySDK implements IDisposable {
         this.state = this._disposables.add(new StateBridge());
         this.cascade = this._disposables.add(new CascadeManager(this.commands, this.state));
         this.monitor = this._disposables.add(new EventMonitor(this.state));
-        this.injection = this._disposables.add(new InjectionManager());
+        this.integration = this._disposables.add(new IntegrationManager());
         this.ls = new LSBridge(
             <T = any>(cmd: string, ...args: any[]) => Promise.resolve(vscode.commands.executeCommand<T>(cmd, ...args))
         );

@@ -4,7 +4,7 @@
  * Verified against Antigravity v1.107.0 DOM (2026-02-28).
  * If Antigravity updates break selectors, only THIS file needs updating.
  *
- * @module injection/selectors
+ * @module integration/selectors
  *
  * @internal
  */
@@ -45,8 +45,8 @@ export const Selectors = {
 } as const;
 
 /**
- * CSS class prefixes used by X-Ray injections.
- * Used to identify and clean up injected elements.
+ * CSS class prefixes used by X-Ray integrations.
+ * Used to identify and clean up integrated elements.
  */
 export const XR_PREFIX = 'xr-';
 

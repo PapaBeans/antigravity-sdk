@@ -69,19 +69,19 @@ export { LSBridge, Models, type ModelId, type IHeadlessCascadeOptions, type ISen
 // Cascade
 export { CascadeManager } from './cascade/cascade-manager';
 
-// Injection
-export { InjectionManager, InjectionPoint } from './injection';
+// Integration
+export { IntegrationManager, IntegrationPoint } from './integration';
 export type {
-    InjectionConfig,
-    IButtonInjection,
-    ITurnMetaInjection,
-    IUserBadgeInjection,
-    IBotActionInjection,
-    IDropdownInjection,
-    ITitleInjection,
+    IntegrationConfig,
+    IButtonIntegration,
+    ITurnMetaIntegration,
+    IUserBadgeIntegration,
+    IBotActionIntegration,
+    IDropdownIntegration,
+    ITitleIntegration,
     IToastConfig,
     TurnMetric,
-} from './injection';
+} from './integration';
 
 // SDK
 export { AntigravitySDK, type ISDKOptions } from './sdk';

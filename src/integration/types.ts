@@ -1,19 +1,19 @@
 /**
- * Injection module types — standardized UI injection points
+ * Integration module types — standardized UI integration points
  * for the Antigravity Agent View.
  *
- * @module injection/types
+ * @module integration/types
  */
 
-// ─── Injection Points ──────────────────────────────────────────────────
+// ─── Integration Points ──────────────────────────────────────────────────
 
 /**
- * Standardized injection points in the Agent View UI.
+ * Standardized integration points in the Agent View UI.
  *
  * Each point corresponds to a specific DOM location in the
  * Antigravity chat interface (verified 2026-02-28).
  */
-export enum InjectionPoint {
+export enum IntegrationPoint {
     /** Top bar — next to +, refresh, ... icons */
     TOP_BAR = 'topBar',
     /** Top right corner — before the X (close) button */
@@ -37,26 +37,26 @@ export enum InjectionPoint {
 // ─── Configuration Interfaces ──────────────────────────────────────────
 
 /**
- * Base configuration for all injection points.
+ * Base configuration for all integration points.
  */
-export interface IInjectionBase {
-    /** Unique ID for this injection (prevents duplicates) */
+export interface IIntegrationBase {
+    /** Unique ID for this integration (prevents duplicates) */
     id: string;
-    /** Which injection point to target */
-    point: InjectionPoint;
-    /** Whether this injection is enabled (default: true) */
+    /** Which integration point to target */
+    point: IntegrationPoint;
+    /** Whether this integration is enabled (default: true) */
     enabled?: boolean;
 }
 
 /**
- * Configuration for button-type injections (top bar, input area, etc.).
+ * Configuration for button-type integrations (top bar, input area, etc.).
  */
-export interface IButtonInjection extends IInjectionBase {
+export interface IButtonIntegration extends IIntegrationBase {
     point:
-    | InjectionPoint.TOP_BAR
-    | InjectionPoint.TOP_RIGHT
-    | InjectionPoint.INPUT_AREA
-    | InjectionPoint.BOTTOM_ICONS;
+    | IntegrationPoint.TOP_BAR
+    | IntegrationPoint.TOP_RIGHT
+    | IntegrationPoint.INPUT_AREA
+    | IntegrationPoint.BOTTOM_ICONS;
     /** Icon (emoji or text glyph) */
     icon: string;
     /** Tooltip text */
@@ -68,10 +68,10 @@ export interface IButtonInjection extends IInjectionBase {
 }
 
 /**
- * Configuration for turn-level metadata injection.
+ * Configuration for turn-level metadata integration.
  */
-export interface ITurnMetaInjection extends IInjectionBase {
-    point: InjectionPoint.TURN_METADATA;
+export interface ITurnMetaIntegration extends IIntegrationBase {
+    point: IntegrationPoint.TURN_METADATA;
     /** Which metrics to display */
     metrics: TurnMetric[];
     /** Whether turns are clickable to show details toast */
@@ -81,8 +81,8 @@ export interface ITurnMetaInjection extends IInjectionBase {
 /**
  * Configuration for user message badges.
  */
-export interface IUserBadgeInjection extends IInjectionBase {
-    point: InjectionPoint.USER_BADGE;
+export interface IUserBadgeIntegration extends IIntegrationBase {
+    point: IntegrationPoint.USER_BADGE;
     /** What to show in the badge */
     display: 'charCount' | 'wordCount' | 'custom';
     /** Custom formatter function body (receives `textLength` as arg) */
@@ -92,8 +92,8 @@ export interface IUserBadgeInjection extends IInjectionBase {
 /**
  * Configuration for bot response action buttons.
  */
-export interface IBotActionInjection extends IInjectionBase {
-    point: InjectionPoint.BOT_ACTION;
+export interface IBotActionIntegration extends IIntegrationBase {
+    point: IntegrationPoint.BOT_ACTION;
     /** Icon */
     icon: string;
     /** Label text */
@@ -105,8 +105,8 @@ export interface IBotActionInjection extends IInjectionBase {
 /**
  * Configuration for dropdown menu items.
  */
-export interface IDropdownInjection extends IInjectionBase {
-    point: InjectionPoint.DROPDOWN_MENU;
+export interface IDropdownIntegration extends IIntegrationBase {
+    point: IntegrationPoint.DROPDOWN_MENU;
     /** Menu item icon */
     icon?: string;
     /** Menu item label */
@@ -120,8 +120,8 @@ export interface IDropdownInjection extends IInjectionBase {
 /**
  * Configuration for chat title interaction.
  */
-export interface ITitleInjection extends IInjectionBase {
-    point: InjectionPoint.CHAT_TITLE;
+export interface ITitleIntegration extends IIntegrationBase {
+    point: IntegrationPoint.CHAT_TITLE;
     /** Interaction type */
     interaction: 'click' | 'dblclick' | 'hover';
     /** Hint text shown on hover */
@@ -178,36 +178,36 @@ export type TurnMetric =
     | 'separator';
 
 /**
- * Union type of all injection configurations.
+ * Union type of all integration configurations.
  */
-export type InjectionConfig =
-    | IButtonInjection
-    | ITurnMetaInjection
-    | IUserBadgeInjection
-    | IBotActionInjection
-    | IDropdownInjection
-    | ITitleInjection;
+export type IntegrationConfig =
+    | IButtonIntegration
+    | ITurnMetaIntegration
+    | IUserBadgeIntegration
+    | IBotActionIntegration
+    | IDropdownIntegration
+    | ITitleIntegration;
 
 // ─── Manager Interface ────────────────────────────────────────────────
 
 /**
- * Public interface for the Injection Manager.
+ * Public interface for the Integration Manager.
  */
-export interface IInjectionManager {
-    /** Register a single injection point */
-    register(config: InjectionConfig): void;
-    /** Register multiple injection points at once */
-    registerMany(configs: InjectionConfig[]): void;
-    /** Remove a registered injection by ID */
+export interface IIntegrationManager {
+    /** Register a single integration point */
+    register(config: IntegrationConfig): void;
+    /** Register multiple integration points at once */
+    registerMany(configs: IntegrationConfig[]): void;
+    /** Remove a registered integration by ID */
     unregister(id: string): void;
-    /** Get all registered injections */
-    getRegistered(): ReadonlyArray<InjectionConfig>;
-    /** Generate the injection script from all registered configs */
+    /** Get all registered integrations */
+    getRegistered(): ReadonlyArray<IntegrationConfig>;
+    /** Generate the integration script from all registered configs */
     build(): string;
     /** Install the generated script into workbench.html */
     install(): Promise<void>;
-    /** Remove the injection from workbench.html */
+    /** Remove the integration from workbench.html */
     uninstall(): Promise<void>;
-    /** Check if an injection is currently installed */
+    /** Check if an integration is currently installed */
     isInstalled(): boolean;
 }

@@ -24,7 +24,7 @@
         "vscode-extension"
     ],
     "author": "Kanezal",
-    "license": "AGPL-3.0-only",
+    "license": "AGPL-3.0-or-later",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/Kanezal/antigravity-sdk.git"

@@ -177,7 +177,7 @@ export class CascadeManager implements IDisposable {
     //   Access: vscode.commands.executeCommand (extension host)
     //   Method: startNewConversation → sendPromptToAgentPanel → restore
     //   PROBLEM: Always switches UI, causes flickering, race conditions.
-    //   Use only when renderer injection is not available.
+    //   Use only when renderer integration is not available.
     //
     // ────────────────────────────────────────────────────────────────────────
 
@@ -186,7 +186,7 @@ export class CascadeManager implements IDisposable {
      *
      * ⚠️ **FALLBACK APPROACH** — causes UI flickering.
      * For true headless creation, use `window.__xrayLS.createHeadless()`
-     * from injected renderer scripts (see SDK injection module).
+     * from integrated renderer scripts (see SDK integration module).
      *
      * VERIFIED 2026-02-28:
      * - `startNewConversation` ✅ creates new chat (but switches UI)

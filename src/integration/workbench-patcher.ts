@@ -1,10 +1,10 @@
 /**
- * Workbench Patcher — Install/uninstall injection scripts into workbench.html.
+ * Workbench Patcher — Install/uninstall integration scripts into workbench.html.
  *
  * Handles the file-level modification of Antigravity's workbench.html
  * to include/remove custom script tags.
  *
- * @module injection/workbench-patcher
+ * @module integration/workbench-patcher
  *
  * @internal
  */
@@ -12,12 +12,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** Marker comment used to identify our injections */
-const MARKER_START = '<!-- X-Ray SDK Injection -->';
-const MARKER_END = '<!-- /X-Ray SDK Injection -->';
+/** Marker comment used to identify our integrations */
+const MARKER_START = '<!-- X-Ray SDK Integration -->';
+const MARKER_END = '<!-- /X-Ray SDK Integration -->';
 
 /** Default script filename */
-const SCRIPT_FILENAME = 'xray-sdk-inject.js';
+const SCRIPT_FILENAME = 'xray-sdk-integrate.js';
 
 /**
  * Manages patching/unpatching of Antigravity's workbench.html.
@@ -54,7 +54,7 @@ export class WorkbenchPatcher {
     }
 
     /**
-     * Check if our injection is currently installed.
+     * Check if our integration is currently installed.
      */
     isInstalled(): boolean {
         if (!this.isAvailable()) return false;
@@ -67,7 +67,7 @@ export class WorkbenchPatcher {
     }
 
     /**
-     * Install the injection script.
+     * Install the integration script.
      *
      * 1. Writes the script file to the workbench directory
      * 2. Patches workbench.html to include a <script> tag
@@ -79,7 +79,7 @@ export class WorkbenchPatcher {
             throw new Error(`Workbench not found at: ${this._workbenchDir}`);
         }
 
-        // First uninstall any previous injection
+        // First uninstall any previous integration
         if (this.isInstalled()) {
             this.uninstall();
         }
@@ -102,7 +102,7 @@ export class WorkbenchPatcher {
     }
 
     /**
-     * Remove the injection.
+     * Remove the integration.
      *
      * 1. Removes the <script> tag from workbench.html
      * 2. Deletes the script file

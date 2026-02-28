@@ -1,43 +1,43 @@
 /**
- * Script Generator — Builds self-contained JS from injection configs.
+ * Script Generator — Builds self-contained JS from integration configs.
  *
- * Generates a Trusted Types-safe injection script that:
+ * Generates a Trusted Types-safe integration script that:
  * - Uses ONLY createElement/textContent (no innerHTML)
  * - Uses MutationObserver for dynamic content
  * - Is fully self-contained (runs in renderer, no Node.js APIs)
  *
- * @module injection/script-generator
+ * @module integration/script-generator
  *
  * @internal
  */
 
 import { Selectors, XR_PREFIX, XR_DATA_ATTR } from './selectors';
 import {
-    InjectionConfig,
-    InjectionPoint,
+    IntegrationConfig,
+    IntegrationPoint,
     IToastConfig,
     IToastRow,
     TurnMetric,
-    IButtonInjection,
-    ITurnMetaInjection,
-    IUserBadgeInjection,
-    IBotActionInjection,
-    IDropdownInjection,
-    ITitleInjection,
+    IButtonIntegration,
+    ITurnMetaIntegration,
+    IUserBadgeIntegration,
+    IBotActionIntegration,
+    IDropdownIntegration,
+    ITitleIntegration,
 } from './types';
 
 /**
- * Generates a self-contained JavaScript injection script
- * from an array of InjectionConfig objects.
+ * Generates a self-contained JavaScript integration script
+ * from an array of IntegrationConfig objects.
  */
 export class ScriptGenerator {
     /**
-     * Generate the complete injection script.
+     * Generate the complete integration script.
      *
-     * @param configs — Registered injection configurations
+     * @param configs — Registered integration configurations
      * @returns — Complete JS code as a string
      */
-    generate(configs: InjectionConfig[]): string {
+    generate(configs: IntegrationConfig[]): string {
         const parts: string[] = [];
 
         parts.push(this._header());
@@ -46,14 +46,14 @@ export class ScriptGenerator {
         parts.push(this._toast());
         parts.push(this._stats());
 
-        // Generate code for each injection point
+        // Generate code for each integration point
         const grouped = this._groupByPoint(configs);
 
         for (const [point, cfgs] of Object.entries(grouped)) {
-            parts.push(this._generatePoint(point as InjectionPoint, cfgs));
+            parts.push(this._generatePoint(point as IntegrationPoint, cfgs));
         }
 
-        parts.push(this._mainLoop(Object.keys(grouped) as InjectionPoint[]));
+        parts.push(this._mainLoop(Object.keys(grouped) as IntegrationPoint[]));
         parts.push(this._footer());
 
         return parts.join('\n');
@@ -61,8 +61,8 @@ export class ScriptGenerator {
 
     // ─── Grouping ──────────────────────────────────────────────────────
 
-    private _groupByPoint(configs: InjectionConfig[]): Record<string, InjectionConfig[]> {
-        const groups: Record<string, InjectionConfig[]> = {};
+    private _groupByPoint(configs: IntegrationConfig[]): Record<string, IntegrationConfig[]> {
+        const groups: Record<string, IntegrationConfig[]> = {};
         for (const c of configs) {
             if (c.enabled === false) continue;
             if (!groups[c.point]) groups[c.point] = [];
@@ -110,10 +110,9 @@ else window.addEventListener('load',function(){setTimeout(start,3000);});
 })();`;
     }
 
-    private _css(configs: InjectionConfig[]): string {
+    private _css(configs: IntegrationConfig[]): string {
         // Only include CSS for points that are actually used
         const points = new Set(configs.map(c => c.point));
-        const rules: string[] = [];
 
         // All colors now use _theme variables for light/dark mode support
         // CSS is generated as a JS template that reads _theme at runtime
@@ -203,26 +202,26 @@ function getStats(){
 
     // ─── Point generators ─────────────────────────────────────────────
 
-    private _generatePoint(point: InjectionPoint, configs: InjectionConfig[]): string {
+    private _generatePoint(point: IntegrationPoint, configs: IntegrationConfig[]): string {
         switch (point) {
-            case InjectionPoint.TOP_BAR:
-                return this._genTopBar(configs as IButtonInjection[]);
-            case InjectionPoint.TOP_RIGHT:
-                return this._genTopRight(configs as IButtonInjection[]);
-            case InjectionPoint.INPUT_AREA:
-                return this._genInputArea(configs as IButtonInjection[]);
-            case InjectionPoint.BOTTOM_ICONS:
-                return this._genBottomIcons(configs as IButtonInjection[]);
-            case InjectionPoint.TURN_METADATA:
-                return this._genTurnMeta(configs as ITurnMetaInjection[]);
-            case InjectionPoint.USER_BADGE:
-                return this._genUserBadge(configs as IUserBadgeInjection[]);
-            case InjectionPoint.BOT_ACTION:
-                return this._genBotAction(configs as IBotActionInjection[]);
-            case InjectionPoint.DROPDOWN_MENU:
-                return this._genDropdown(configs as IDropdownInjection[]);
-            case InjectionPoint.CHAT_TITLE:
-                return this._genTitle(configs as ITitleInjection[]);
+            case IntegrationPoint.TOP_BAR:
+                return this._genTopBar(configs as IButtonIntegration[]);
+            case IntegrationPoint.TOP_RIGHT:
+                return this._genTopRight(configs as IButtonIntegration[]);
+            case IntegrationPoint.INPUT_AREA:
+                return this._genInputArea(configs as IButtonIntegration[]);
+            case IntegrationPoint.BOTTOM_ICONS:
+                return this._genBottomIcons(configs as IButtonIntegration[]);
+            case IntegrationPoint.TURN_METADATA:
+                return this._genTurnMeta(configs as ITurnMetaIntegration[]);
+            case IntegrationPoint.USER_BADGE:
+                return this._genUserBadge(configs as IUserBadgeIntegration[]);
+            case IntegrationPoint.BOT_ACTION:
+                return this._genBotAction(configs as IBotActionIntegration[]);
+            case IntegrationPoint.DROPDOWN_MENU:
+                return this._genDropdown(configs as IDropdownIntegration[]);
+            case IntegrationPoint.CHAT_TITLE:
+                return this._genTitle(configs as ITitleIntegration[]);
             default:
                 return `// Unknown point: ${point}`;
         }
@@ -244,7 +243,7 @@ function getStats(){
         return `toast(${JSON.stringify(toast.title)},${badge},[${rows}]);`;
     }
 
-    private _genTopBar(configs: IButtonInjection[]): string {
+    private _genTopBar(configs: IButtonIntegration[]): string {
         const buttons = configs.map(c => {
             const toastCall = this._genToastCall(c.toast);
             return `  var btn_${c.id}=mk('a','${XR_PREFIX}hdr ${XR_PREFIX}${c.id}');
@@ -255,7 +254,7 @@ function getStats(){
         });
 
         return `
-function injectTopBar(){
+function integrateTopBar(){
   var p=document.querySelector(${JSON.stringify(Selectors.PANEL)});if(!p)return;
   var topBar=p.querySelector(${JSON.stringify(Selectors.TOP_BAR)});if(!topBar)return;
   var iconsArea=topBar.querySelector(${JSON.stringify(Selectors.TOP_ICONS)});
@@ -265,7 +264,7 @@ ${buttons.join('\n')}
 `;
     }
 
-    private _genTopRight(configs: IButtonInjection[]): string {
+    private _genTopRight(configs: IButtonIntegration[]): string {
         const buttons = configs.map(c => {
             const toastCall = this._genToastCall(c.toast);
             return `  var btn_${c.id}=mk('a','${XR_PREFIX}hdr ${XR_PREFIX}${c.id}');
@@ -276,7 +275,7 @@ ${buttons.join('\n')}
         });
 
         return `
-function injectTopRight(){
+function integrateTopRight(){
   var p=document.querySelector(${JSON.stringify(Selectors.PANEL)});if(!p)return;
   var topBar=p.querySelector(${JSON.stringify(Selectors.TOP_BAR)});if(!topBar)return;
   var iconsArea=topBar.querySelector(${JSON.stringify(Selectors.TOP_ICONS)});
@@ -286,7 +285,7 @@ ${buttons.join('\n')}
 `;
     }
 
-    private _genInputArea(configs: IButtonInjection[]): string {
+    private _genInputArea(configs: IButtonIntegration[]): string {
         const buttons = configs.map(c => {
             const toastCall = this._genToastCall(c.toast);
             return `  var btn=mk('div','${XR_PREFIX}inp ${XR_PREFIX}${c.id}');
@@ -297,7 +296,7 @@ ${buttons.join('\n')}
         });
 
         return `
-function injectInputArea(){
+function integrateInputArea(){
   var ib=document.querySelector(${JSON.stringify(Selectors.INPUT_BOX)});
   if(!ib||ib.querySelector('.${XR_PREFIX}${configs[0].id}'))return;
   var allBtns=ib.querySelectorAll('button,[role="button"]');
@@ -308,7 +307,7 @@ ${buttons.join('\n')}
 `;
     }
 
-    private _genBottomIcons(configs: IButtonInjection[]): string {
+    private _genBottomIcons(configs: IButtonIntegration[]): string {
         const buttons = configs.map(c => {
             const toastCall = this._genToastCall(c.toast);
             return `  var btn=mk('div','${XR_PREFIX}inp ${XR_PREFIX}${c.id}');
@@ -319,7 +318,7 @@ ${buttons.join('\n')}
         });
 
         return `
-function injectBottomIcons(){
+function integrateBottomIcons(){
   var ib=document.querySelector(${JSON.stringify(Selectors.INPUT_BOX)});
   if(!ib||ib.querySelector('.${XR_PREFIX}${configs[0].id}'))return;
   var rows=ib.querySelectorAll('.flex.items-center');
@@ -331,7 +330,7 @@ ${buttons.join('\n')}
 `;
     }
 
-    private _genTurnMeta(configs: ITurnMetaInjection[]): string {
+    private _genTurnMeta(configs: ITurnMetaIntegration[]): string {
         // Take first config for metrics (single turn metadata style)
         const cfg = configs[0];
         const metricParts: string[] = [];
@@ -367,7 +366,7 @@ ${buttons.join('\n')}
             : '';
 
         return `
-function injectTurnMeta(){
+function integrateTurnMeta(){
   var c=document.querySelector(${JSON.stringify(Selectors.TURNS_CONTAINER)});if(!c)return;
   var tI=0;
   Array.from(c.children).forEach(function(turn){
@@ -387,7 +386,7 @@ function injectTurnMeta(){
 `;
     }
 
-    private _genUserBadge(configs: IUserBadgeInjection[]): string {
+    private _genUserBadge(configs: IUserBadgeIntegration[]): string {
         const cfg = configs[0];
         let displayExpr = 'fmt(uLen)+" ch"';
         if (cfg.display === 'wordCount') {
@@ -397,7 +396,7 @@ function injectTurnMeta(){
         }
 
         return `
-function injectUserBadges(){
+function integrateUserBadges(){
   var c=document.querySelector(${JSON.stringify(Selectors.TURNS_CONTAINER)});if(!c)return;
   Array.from(c.children).forEach(function(turn,i){
     if(turn.getAttribute('${XR_DATA_ATTR}u')||turn.children.length<1)return;
@@ -416,7 +415,7 @@ function injectUserBadges(){
 `;
     }
 
-    private _genBotAction(configs: IBotActionInjection[]): string {
+    private _genBotAction(configs: IBotActionIntegration[]): string {
         const items = configs.map(c => {
             const toastCall = this._genToastCall(c.toast);
             return `var b=mk('span','${XR_PREFIX}vote');b.textContent=${JSON.stringify(c.icon + ' ' + c.label)};
@@ -425,7 +424,7 @@ function injectUserBadges(){
         });
 
         return `
-function injectBotAction(){
+function integrateBotAction(){
   var c=document.querySelector(${JSON.stringify(Selectors.TURNS_CONTAINER)});if(!c)return;
   c.querySelectorAll('span,button,a,div').forEach(function(el){
     if(el.getAttribute('${XR_DATA_ATTR}v'))return;
@@ -440,7 +439,7 @@ function injectBotAction(){
 `;
     }
 
-    private _genDropdown(configs: IDropdownInjection[]): string {
+    private _genDropdown(configs: IDropdownIntegration[]): string {
         const markers = JSON.stringify(Selectors.DROPDOWN_MARKER_TEXT);
         const items = configs.map(c => {
             const toastCall = this._genToastCall(c.toast);
@@ -456,7 +455,7 @@ function injectBotAction(){
         });
 
         return `
-function injectDropdown(){
+function integrateDropdown(){
   var dds=document.querySelectorAll('.rounded-bg.py-1,.rounded-lg.py-1');
   dds.forEach(function(dd){
     if(dd.getAttribute('${XR_DATA_ATTR}m'))return;
@@ -472,13 +471,13 @@ function injectDropdown(){
 `;
     }
 
-    private _genTitle(configs: ITitleInjection[]): string {
+    private _genTitle(configs: ITitleIntegration[]): string {
         const cfg = configs[0];
         const toastCall = this._genToastCall(cfg.toast);
         const event = cfg.interaction || 'dblclick';
 
         return `
-function injectTitle(){
+function integrateTitle(){
   var p=document.querySelector(${JSON.stringify(Selectors.PANEL)});if(!p)return;
   var el=p.querySelector(${JSON.stringify(Selectors.TITLE)});
   if(!el||el.getAttribute('${XR_DATA_ATTR}t'))return;
@@ -497,17 +496,17 @@ function injectTitle(){
 
     // ─── Main loop ────────────────────────────────────────────────────
 
-    private _mainLoop(points: InjectionPoint[]): string {
+    private _mainLoop(points: IntegrationPoint[]): string {
         const fnMap: Record<string, string> = {
-            [InjectionPoint.TOP_BAR]: 'injectTopBar',
-            [InjectionPoint.TOP_RIGHT]: 'injectTopRight',
-            [InjectionPoint.INPUT_AREA]: 'injectInputArea',
-            [InjectionPoint.BOTTOM_ICONS]: 'injectBottomIcons',
-            [InjectionPoint.TURN_METADATA]: 'injectTurnMeta',
-            [InjectionPoint.USER_BADGE]: 'injectUserBadges',
-            [InjectionPoint.BOT_ACTION]: 'injectBotAction',
-            [InjectionPoint.DROPDOWN_MENU]: 'injectDropdown',
-            [InjectionPoint.CHAT_TITLE]: 'injectTitle',
+            [IntegrationPoint.TOP_BAR]: 'integrateTopBar',
+            [IntegrationPoint.TOP_RIGHT]: 'integrateTopRight',
+            [IntegrationPoint.INPUT_AREA]: 'integrateInputArea',
+            [IntegrationPoint.BOTTOM_ICONS]: 'integrateBottomIcons',
+            [IntegrationPoint.TURN_METADATA]: 'integrateTurnMeta',
+            [IntegrationPoint.USER_BADGE]: 'integrateUserBadges',
+            [IntegrationPoint.BOT_ACTION]: 'integrateBotAction',
+            [IntegrationPoint.DROPDOWN_MENU]: 'integrateDropdown',
+            [IntegrationPoint.CHAT_TITLE]: 'integrateTitle',
         };
 
         const calls = points.map(p => `    ${fnMap[p]}();`).join('\n');
@@ -524,7 +523,7 @@ function start(){
   fullScan();
   new MutationObserver(debounced).observe(p,{childList:true,subtree:true});
   setInterval(fullScan,8000);
-  console.log('[X-Ray SDK] Active \\u2014 ${points.length} injection points');
+  console.log('[X-Ray SDK] Active \\u2014 ${points.length} integration points');
 }
 `;
     }
