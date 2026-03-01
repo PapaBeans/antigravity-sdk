@@ -155,12 +155,12 @@ export class AntigravitySDK implements IDisposable {
         // Initialize cascade manager (loads session list)
         await this.cascade.initialize();
 
-        // Initialize LS bridge (discovers Language Server port)
+        // Initialize LS bridge (discovers Language Server port + CSRF token)
         const lsOk = await this.ls.initialize();
         if (lsOk) {
-            log.info(`LS bridge ready on port ${this.ls.port}`);
+            log.info(`LS bridge ready on port ${this.ls.port} (csrf: ${this.ls.hasCsrfToken ? 'ok' : 'missing'})`);
         } else {
-            log.warn('LS bridge not available (headless API disabled, command fallback active)');
+            log.warn('LS bridge not available — use sdk.ls.setConnection(port, csrfToken) or command fallback');
         }
 
         // Refresh integration heartbeat (so renderer script knows extension is active)
@@ -181,7 +181,7 @@ export class AntigravitySDK implements IDisposable {
      * Get the SDK version.
      */
     get version(): string {
-        return '1.1.0';
+        return '1.3.0';
     }
 
     /**

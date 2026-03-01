@@ -1,15 +1,18 @@
 /**
  * Language Server Bridge — Direct ConnectRPC calls to the local LS.
  *
- * VERIFIED 2026-02-28:
- * The Antigravity Language Server listens on 127.0.0.1:{port} using
- * ConnectRPC (gRPC-Web compatible) with self-signed TLS.
+ * UPDATED 2026-03-01 (v1.3.0):
+ * Fixed CSRF token authentication (Issue #1).
+ * The LS binary is launched with --csrf_token as a CLI argument.
+ * Previous versions did not send this token, causing 401 "missing CSRF token".
+ *
+ * Discovery strategy (multi-layer):
+ * 1. Process CLI args — extract --port and --csrf_token from LS process
+ * 2. getDiagnostics console logs — fallback for port discovery
+ * 3. Manual override — setConnection(port, csrfToken)
  *
  * Service: exa.language_server_pb.LanguageServerService
- * Protocol: HTTPS POST with JSON body (Content-Type: application/json)
- *
- * This bridge enables FULLY HEADLESS cascade creation from the
- * extension host — no UI switching, no panel opening.
+ * Protocol: HTTPS POST with JSON body + x-csrf-token header
  *
  * @module transport/ls-bridge
  */
@@ -53,8 +56,8 @@ export interface ISendMessageOptions {
 /**
  * Direct bridge to the Language Server via ConnectRPC.
  *
- * Discovers the LS port from getDiagnostics console logs,
- * then makes HTTPS POST calls to the LS endpoints.
+ * Discovers the LS port and CSRF token from the LS process CLI args,
+ * then makes authenticated HTTPS POST calls to the LS endpoints.
  *
  * @example
  * ```typescript
@@ -76,20 +79,42 @@ export interface ISendMessageOptions {
  */
 export class LSBridge {
     private _port: number | null = null;
+    private _csrfToken: string | null = null;
+    private _useTls: boolean = false;
     private _executeCommand: <T = any>(command: string, ...args: any[]) => Promise<T>;
 
     constructor(executeCommand: <T = any>(command: string, ...args: any[]) => Promise<T>) {
         this._executeCommand = executeCommand;
     }
 
-    /** Discover the Language Server port. Must be called before other methods. */
+    /**
+     * Discover the Language Server port and CSRF token.
+     * Must be called before other methods.
+     *
+     * Discovery chain:
+     * 1. Parse LS process CLI arguments (--port, --csrf_token)
+     * 2. Fallback: getDiagnostics console logs (port only)
+     * 3. Manual: call setConnection() after initialize() returns false
+     */
     async initialize(): Promise<boolean> {
-        this._port = await this._discoverPort();
-        if (this._port) {
-            log.info(`LS port discovered: ${this._port}`);
+        // Strategy 1: discover from LS process CLI args (port + CSRF)
+        const fromProcess = await this._discoverFromProcess();
+        if (fromProcess) {
+            this._port = fromProcess.port;
+            this._csrfToken = fromProcess.csrfToken;
+            this._useTls = fromProcess.useTls;
+            log.info(`LS discovered from process: port=${this._port}, tls=${this._useTls}, csrf=${this._csrfToken ? 'found' : 'missing'}`);
             return true;
         }
-        log.warn('Could not discover LS port');
+
+        // Strategy 2: fallback to getDiagnostics logs (port only, no CSRF)
+        this._port = await this._discoverPortFromDiagnostics();
+        if (this._port) {
+            log.warn(`LS port from diagnostics: ${this._port}, but CSRF token not found — RPC calls may fail with 401`);
+            return true;
+        }
+
+        log.warn('Could not discover LS connection. Use setConnection(port, csrfToken) manually.');
         return false;
     }
 
@@ -101,6 +126,38 @@ export class LSBridge {
     /** The discovered LS port */
     get port(): number | null {
         return this._port;
+    }
+
+    /** Whether CSRF token is available */
+    get hasCsrfToken(): boolean {
+        return this._csrfToken !== null;
+    }
+
+    /**
+     * Manually set the LS connection parameters.
+     *
+     * Use this when auto-discovery fails (e.g., non-standard install,
+     * or you've discovered the port/token through other means like `lsof`).
+     *
+     * @param port - LS port number
+     * @param csrfToken - CSRF token from LS process CLI args
+     * @param useTls - Whether to use HTTPS (default: false, extension_server uses HTTP)
+     *
+     * @example
+     * ```typescript
+     * const ls = new LSBridge(commandBridge);
+     * const ok = await ls.initialize();
+     * if (!ok) {
+     *     // Manual fallback: get port and csrf from your own discovery
+     *     ls.setConnection(54321, 'abc123-csrf-token');
+     * }
+     * ```
+     */
+    setConnection(port: number, csrfToken: string, useTls: boolean = false): void {
+        this._port = port;
+        this._csrfToken = csrfToken;
+        this._useTls = useTls;
+        log.info(`LS connection set manually: port=${port}, tls=${useTls}, csrf=${csrfToken ? 'provided' : 'empty'}`);
     }
 
     // ─── Headless Cascade API ────────────────────────────────────────
@@ -217,7 +274,261 @@ export class LSBridge {
         await this._rpc('SendUserCascadeMessage', payload);
     }
 
-    private async _discoverPort(): Promise<number | null> {
+    /**
+     * Discover LS port and CSRF token from the Language Server process.
+     *
+     * VERIFIED 2026-03-01 from Antigravity extension.js source:
+     *
+     * 1. CSRF header is "x-codeium-csrf-token" (NOT x-csrf-token)
+     * 2. CSRF value is --csrf_token from CLI (NOT --extension_server_csrf_token)
+     * 3. ConnectRPC endpoint is on httpsPort (HTTPS) or httpPort (HTTP)
+     *    These ports are NOT in CLI args (--random_port flag means random).
+     *    We discover them via netstat/PID, excluding extension_server_port.
+     *
+     * Source code proof:
+     *   n.header.set("x-codeium-csrf-token", e)        // header name
+     *   address = `127.0.0.1:${te.httpsPort}`           // ConnectRPC address
+     *   csrfToken = a = d.randomUUID() → --csrf_token   // token source
+     *   t.headers["x-codeium-csrf-token"] === this.csrfToken ? ... : 403
+     *
+     * Discovery: 2 phases
+     *   Phase 1: Get-CimInstance/ps → PID, --csrf_token, --extension_server_port
+     *   Phase 2: netstat → find LISTENING ports for PID, exclude ext_server_port
+     */
+    private async _discoverFromProcess(): Promise<{ port: number; csrfToken: string; useTls: boolean } | null> {
+        try {
+            const { execSync } = require('child_process');
+            const platform = process.platform;
+
+            // Phase 1: find LS process, extract PID, csrf_token, extension_server_port
+            let processInfo = await this._findLSProcess(execSync, platform);
+            if (!processInfo) {
+                log.debug('No LS processes found');
+                return null;
+            }
+
+            log.debug(`LS process found: PID=${processInfo.pid}, csrf=present, ext_port=${processInfo.extPort}`);
+
+            // Phase 2: find actual ConnectRPC port via netstat
+            const connectPort = await this._findConnectPort(execSync, platform, processInfo.pid, processInfo.extPort);
+            if (!connectPort) {
+                log.debug('Could not find ConnectRPC port via netstat, trying extension_server_port as fallback');
+                // Fallback: try extension_server_port with HTTP
+                if (processInfo.extPort) {
+                    return { port: processInfo.extPort, csrfToken: processInfo.csrfToken, useTls: false };
+                }
+                return null;
+            }
+
+            return {
+                port: connectPort.port,
+                csrfToken: processInfo.csrfToken,
+                useTls: connectPort.tls,
+            };
+
+        } catch (err) {
+            log.debug('Process discovery failed', err);
+        }
+        return null;
+    }
+
+    /**
+     * Phase 1: Find the LS process for this workspace.
+     */
+    private async _findLSProcess(
+        execSync: any,
+        platform: string,
+    ): Promise<{ pid: number; csrfToken: string; extPort: number } | null> {
+        let output: string;
+
+        if (platform === 'win32') {
+            // Use -EncodedCommand to avoid all PowerShell escaping issues with $_ and quotes
+            const psScript = "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'language_server' -and $_.CommandLine -match 'csrf_token' } | ForEach-Object { $_.ProcessId.ToString() + '|' + $_.CommandLine }";
+            const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+            output = execSync(
+                `powershell.exe -NoProfile -EncodedCommand ${encoded}`,
+                { encoding: 'utf8', timeout: 10000, windowsHide: true },
+            );
+        } else {
+            output = execSync(
+                'ps -eo pid,args 2>/dev/null | grep language_server | grep csrf_token | grep -v grep',
+                { encoding: 'utf8', timeout: 5000 },
+            );
+        }
+
+        const lines = output.split('\n').filter((l: string) => l.trim().length > 0);
+        if (lines.length === 0) return null;
+
+        const workspaceHint = this._getWorkspaceHint();
+        let bestLine: string | null = null;
+
+        if (workspaceHint) {
+            for (const line of lines) {
+                if (line.includes(workspaceHint)) {
+                    bestLine = line;
+                    break;
+                }
+            }
+        }
+        if (!bestLine) bestLine = lines[0];
+
+        // Extract PID (first field before | on Windows, first token on Unix)
+        let pid: number;
+        if (platform === 'win32') {
+            pid = parseInt(bestLine.split('|')[0].trim(), 10);
+        } else {
+            pid = parseInt(bestLine.trim().split(/\s+/)[0], 10);
+        }
+
+        const csrfToken = this._extractArg(bestLine, 'csrf_token');
+        const extPortStr = this._extractArg(bestLine, 'extension_server_port');
+        const extPort = extPortStr ? parseInt(extPortStr, 10) : 0;
+
+        if (!csrfToken || isNaN(pid)) return null;
+
+        return { pid, csrfToken, extPort };
+    }
+
+    /**
+     * Phase 2: Find ConnectRPC port via netstat.
+     *
+     * The LS process listens on multiple ports:
+     * - httpsPort (HTTPS, ConnectRPC) ← this is what we want
+     * - httpPort  (HTTP, ConnectRPC)  ← also works
+     * - lspPort   (LSP JSON-RPC)
+     * - extension_server_port is separate (for Extension Host IPC)
+     *
+     * We find all LISTENING ports for the LS PID, exclude ext_server_port,
+     * then try HTTPS first (preferred), fall back to HTTP.
+     */
+    private async _findConnectPort(
+        execSync: any,
+        platform: string,
+        pid: number,
+        extPort: number,
+    ): Promise<{ port: number; tls: boolean } | null> {
+        try {
+            let output: string;
+
+            if (platform === 'win32') {
+                output = execSync(
+                    `netstat -aon | findstr "LISTENING" | findstr "${pid}"`,
+                    { encoding: 'utf8', timeout: 5000, windowsHide: true },
+                );
+            } else {
+                output = execSync(
+                    `ss -tlnp 2>/dev/null | grep "pid=${pid}" || netstat -tlnp 2>/dev/null | grep "${pid}"`,
+                    { encoding: 'utf8', timeout: 5000 },
+                );
+            }
+
+            // Extract all listening ports for this PID
+            const portMatches = output.matchAll(/127\.0\.0\.1:(\d+)/g);
+            const ports: number[] = [];
+            for (const m of portMatches) {
+                const p = parseInt(m[1], 10);
+                // Exclude extension_server_port
+                if (p !== extPort && !ports.includes(p)) {
+                    ports.push(p);
+                }
+            }
+
+            if (ports.length === 0) return null;
+
+            log.debug(`LS ports (excl ext ${extPort}): ${ports.join(', ')}`);
+
+            // Try to identify httpsPort vs httpPort by probing
+            // Strategy: try HTTPS first on each port (httpsPort is preferred)
+            for (const port of ports) {
+                const tls = await this._probePort(port, true);
+                if (tls) return { port, tls: true };
+            }
+
+            // Fallback: try HTTP
+            for (const port of ports) {
+                const http = await this._probePort(port, false);
+                if (http) return { port, tls: false };
+            }
+
+        } catch (err) {
+            log.debug('netstat port discovery failed', err);
+        }
+        return null;
+    }
+
+    /**
+     * Quick probe: check if a port accepts ConnectRPC requests.
+     * Returns true if the port responds (even with error) on the given protocol.
+     */
+    private _probePort(port: number, useTls: boolean): Promise<boolean> {
+        const mod = useTls ? require('https') : require('http');
+        const proto = useTls ? 'https' : 'http';
+        return new Promise((resolve) => {
+            const req = mod.request(`${proto}://127.0.0.1:${port}/exa.language_server_pb.LanguageServerService/GetUserStatus`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': 2 },
+                rejectUnauthorized: false,
+                timeout: 2000,
+            }, (res: any) => {
+                // 401 = correct endpoint, just missing CSRF (expected)
+                // 200 = also correct (unlikely without CSRF but possible)
+                resolve(res.statusCode === 401 || res.statusCode === 200);
+            });
+            req.on('error', () => resolve(false));
+            req.on('timeout', () => { req.destroy(); resolve(false); });
+            req.write('{}');
+            req.end();
+        });
+    }
+
+    /**
+     * Get a workspace hint string used to match the correct LS process.
+     *
+     * The LS process has --workspace_id like:
+     *   file_d_3A_programming_better_antigravity
+     * which is an encoded version of the workspace URI.
+     */
+    private _getWorkspaceHint(): string {
+        try {
+            const vscode = require('vscode');
+            const folders = vscode.workspace?.workspaceFolders;
+            if (folders && folders.length > 0) {
+                // Convert workspace path to LS workspace_id format
+                // e.g., "d:\programming\better-antigravity" -> "better_antigravity"
+                // (LS uses underscored path segments)
+                const folder = folders[0].uri.fsPath;
+                const parts = folder.replace(/\\/g, '/').split('/');
+                // Use last 2-3 segments for matching
+                return parts.slice(-2).join('_').replace(/[-.\s]/g, '_').toLowerCase();
+            }
+        } catch {
+            // vscode not available (e.g., testing)
+        }
+        return '';
+    }
+
+    /**
+     * Extract a CLI argument value from a command-line string.
+     * Supports both --key=value and --key value formats.
+     */
+    private _extractArg(cmdLine: string, argName: string): string | null {
+        // --argName=value
+        const eqMatch = cmdLine.match(new RegExp(`--${argName}=([^\\s"]+)`));
+        if (eqMatch) return eqMatch[1];
+
+        // --argName value
+        const spaceMatch = cmdLine.match(new RegExp(`--${argName}\\s+([^\\s"]+)`));
+        if (spaceMatch) return spaceMatch[1];
+
+        return null;
+    }
+
+    /**
+     * Fallback: discover port from getDiagnostics console logs.
+     * NOTE: This does NOT discover the CSRF token.
+     * In recent Antigravity versions, the port URL may no longer appear in logs.
+     */
+    private async _discoverPortFromDiagnostics(): Promise<number | null> {
         try {
             const raw = await this._executeCommand<string>('antigravity.getDiagnostics');
             if (!raw || typeof raw !== 'string') return null;
@@ -229,29 +540,60 @@ export class LSBridge {
             const m1 = logs.match(/127\.0\.0\.1:(\d+)\/exa\.language_server_pb/);
             if (m1) return parseInt(m1[1], 10);
 
-            // Fallback: any 127.0.0.1:{port}
+            // Fallback: any 127.0.0.1:{port} in HTTPS context
             const m2 = logs.match(/https?:\/\/127\.0\.0\.1:(\d+)/);
             if (m2) return parseInt(m2[1], 10);
+
+            // Check mainThreadLogs for port info
+            if (diag.mainThreadLogs) {
+                const mainLogs = typeof diag.mainThreadLogs === 'string'
+                    ? diag.mainThreadLogs
+                    : JSON.stringify(diag.mainThreadLogs);
+                const m3 = mainLogs.match(/127\.0\.0\.1:(\d+)/);
+                if (m3) return parseInt(m3[1], 10);
+            }
         } catch (err) {
-            log.error('Failed to discover LS port', err);
+            log.error('Failed to discover LS port from diagnostics', err);
         }
         return null;
     }
 
+    /**
+     * Make an authenticated RPC call to the Language Server.
+     * Sends x-csrf-token header when available.
+     *
+     * VERIFIED 2026-03-01:
+     * - extension_server_port uses plain HTTP (no TLS)
+     * - Main LS port (--random_port) uses HTTPS with self-signed cert
+     */
     private async _rpc(method: string, payload: any): Promise<any> {
-        const https = require('https');
-        const url = `https://127.0.0.1:${this._port}/exa.language_server_pb.LanguageServerService/${method}`;
+        const httpModule = this._useTls ? require('https') : require('http');
+        const protocol = this._useTls ? 'https' : 'http';
+        const url = `${protocol}://127.0.0.1:${this._port}/exa.language_server_pb.LanguageServerService/${method}`;
 
         return new Promise((resolve, reject) => {
             const body = JSON.stringify(payload);
-            const req = https.request(url, {
+            const headers: Record<string, string | number> = {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+            };
+
+            // CSRF header: "x-codeium-csrf-token" (verified from extension.js source)
+            if (this._csrfToken) {
+                headers['x-codeium-csrf-token'] = this._csrfToken;
+            }
+
+            const reqOptions: any = {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(body),
-                },
-                rejectUnauthorized: false, // Self-signed TLS
-            }, (res: any) => {
+                headers,
+            };
+
+            // Self-signed TLS when using HTTPS
+            if (this._useTls) {
+                reqOptions.rejectUnauthorized = false;
+            }
+
+            const req = httpModule.request(url, reqOptions, (res: any) => {
                 let data = '';
                 res.on('data', (chunk: string) => { data += chunk; });
                 res.on('end', () => {
@@ -259,7 +601,10 @@ export class LSBridge {
                         try { resolve(JSON.parse(data)); }
                         catch { resolve(data); }
                     } else {
-                        reject(new Error(`LS ${method}: ${res.statusCode} — ${data.substring(0, 200)}`));
+                        const hint = res.statusCode === 401
+                            ? ' (CSRF token may be invalid or missing -- try setConnection() with the correct token)'
+                            : '';
+                        reject(new Error(`LS ${method}: ${res.statusCode} -- ${data.substring(0, 200)}${hint}`));
                     }
                 });
             });

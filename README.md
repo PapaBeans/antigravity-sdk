@@ -196,6 +196,37 @@ const browserPort = await sdk.cascade.getBrowserPort();
 const ignored = await sdk.cascade.isFileGitIgnored('secret.env');
 ```
 
+### Headless Cascade (LSBridge)
+
+Create and manage conversations programmatically through the Language Server — no UI flicker, no panel switching.
+
+```typescript
+import { Models } from 'antigravity-sdk';
+
+// Create a headless cascade with model selection
+const cascadeId = await sdk.ls.createCascade({
+  text: 'Analyze test coverage in this project',
+  model: Models.GEMINI_FLASH,
+});
+
+// Send follow-up messages
+await sdk.ls.sendMessage({
+  cascadeId,
+  text: 'Now fix the failing tests',
+  model: Models.GEMINI_PRO_HIGH,
+});
+
+// Focus in UI when ready
+await sdk.ls.focusCascade(cascadeId);
+
+// Or make raw RPC calls to any of the 148 LS methods
+const status = await sdk.ls.getUserStatus();
+const cascades = await sdk.ls.listCascades();
+```
+
+> [!NOTE]
+> LSBridge auto-discovers the Language Server port and CSRF token from the running LS process. If auto-discovery fails (sandboxed environments), use `sdk.ls.setConnection(port, csrfToken)` manually.
+
 ---
 
 ## Architecture
@@ -263,10 +294,11 @@ Your Extension
 
 ### How it works
 
-All SDK communication goes through two safe channels:
+All SDK communication goes through three safe, local channels:
 
 1. **`vscode.commands.executeCommand()`** — the standard VS Code Extension API that all extensions use. Antigravity decides what to execute.
 2. **Read-only local state** — the SDK reads `state.vscdb` for preferences and metadata, never writes.
+3. **Local Language Server** — the SDK communicates with the LS process on `127.0.0.1` using the same ConnectRPC protocol that Antigravity itself uses. Authentication is via an ephemeral per-session CSRF token (not the user's OAuth token). No data leaves the local machine through this channel.
 
 The SDK includes a `SENSITIVE_KEYS` blocklist that prevents extension developers from accidentally (or intentionally) accessing authentication data.
 
