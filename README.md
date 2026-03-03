@@ -6,6 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/antigravity-sdk)](https://www.npmjs.com/package/antigravity-sdk)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-Support%20this%20project-ff69b4?logo=githubsponsors&logoColor=white)](https://github.com/Kanezal/antigravity-sdk#support)
 
 *Build powerful extensions that work alongside Antigravity's AI agent.*
 
@@ -328,6 +329,17 @@ This is a community project. PRs welcome!
 
 > [!WARNING]
 > This project is not affiliated with Google or the Antigravity team. The SDK interacts with Antigravity through its existing extension API and local state files. Use at your own risk and in compliance with applicable terms of service.
+
+---
+
+## Support
+
+If you find this project useful and want to support its development, you can send **USDT** to:
+
+| Network | Address |
+|---------|---------|
+| **TON** | `UQCjVh3C3mZc44GjT2IDsS4pmeOoUgRNxWMcb85NS5Bz_v1d` |
+| **TRON (TRC20)** | `TH3JKGjNrSDCsjkkSuneaSMZoJYF7CNTXD` |
 
 ---
 
