@@ -54,6 +54,23 @@ export interface ISendMessageOptions {
 }
 
 /**
+ * Conversation annotation fields (from jetski_cortex.proto ConversationAnnotations).
+ *
+ * These are metadata annotations on a conversation that the user can set.
+ * The LS stores these natively and they persist across sessions.
+ */
+export interface IConversationAnnotations {
+    /** Custom user title -- overrides the auto-generated summary */
+    title?: string;
+    /** Tags/labels for organization */
+    tags?: string[];
+    /** Whether this conversation is archived */
+    archived?: boolean;
+    /** Whether this conversation is starred (pinned) */
+    starred?: boolean;
+}
+
+/**
  * Direct bridge to the Language Server via ConnectRPC.
  *
  * Discovers the LS port and CSRF token from the LS process CLI args,
@@ -216,6 +233,80 @@ export class LSBridge {
         await this._rpc('CancelCascadeInvocation', { cascadeId });
     }
 
+    // ─── Conversation Annotations API ───────────────────────────────
+
+    /**
+     * Native conversation annotations (verified from jetski_cortex.proto).
+     *
+     * ConversationAnnotations protobuf fields:
+     *   - title (string)              — custom user title, overrides auto-summary
+     *   - tags (string[])             — tags/labels
+     *   - archived (bool)             — archive status  
+     *   - starred (bool)              — pinned/starred
+     *   - last_user_view_time (Timestamp)
+     *
+     * @param cascadeId - Conversation ID
+     * @param annotations - Partial annotation fields to set
+     * @param merge - If true, merge with existing annotations (default: true)
+     */
+    async updateAnnotations(
+        cascadeId: string,
+        annotations: IConversationAnnotations,
+        merge: boolean = true,
+    ): Promise<void> {
+        this._ensureReady();
+
+        // Convert camelCase to snake_case for protobuf
+        const proto: Record<string, any> = {};
+        if (annotations.title !== undefined) proto.title = annotations.title;
+        if (annotations.starred !== undefined) proto.starred = annotations.starred;
+        if (annotations.archived !== undefined) proto.archived = annotations.archived;
+        if (annotations.tags !== undefined) proto.tags = annotations.tags;
+
+        await this._rpc('UpdateConversationAnnotations', {
+            cascadeId,
+            annotations: proto,
+            mergeAnnotations: merge,
+        });
+        log.info(`Annotations updated for ${cascadeId.substring(0, 8)}...`);
+    }
+
+    /**
+     * Set a custom title for a conversation.
+     *
+     * This sets the `title` field in ConversationAnnotations.
+     * When set, this title should be displayed instead of the
+     * auto-generated `summary` from the LLM.
+     *
+     * @param cascadeId - Conversation ID
+     * @param title - Custom title to set
+     */
+    async setTitle(cascadeId: string, title: string): Promise<void> {
+        await this.updateAnnotations(cascadeId, { title });
+    }
+
+    /**
+     * Star (pin) or unstar a conversation.
+     *
+     * This sets the `starred` field in ConversationAnnotations.
+     *
+     * @param cascadeId - Conversation ID
+     * @param starred - true to star, false to unstar
+     */
+    async setStar(cascadeId: string, starred: boolean): Promise<void> {
+        await this.updateAnnotations(cascadeId, { starred });
+    }
+
+    // ─── Conversation Read API ──────────────────────────────────────
+
+    /**
+     * Get details of a specific conversation.
+     */
+    async getConversation(cascadeId: string): Promise<any> {
+        this._ensureReady();
+        return this._rpc('GetConversation', { cascadeId });
+    }
+
     /**
      * Get all cascade trajectories (conversation list).
      */
@@ -223,6 +314,15 @@ export class LSBridge {
         this._ensureReady();
         const resp = await this._rpc('GetAllCascadeTrajectories', {});
         return resp?.trajectorySummaries ?? {};
+    }
+
+    /**
+     * Get trajectory descriptions (lighter than full trajectories).
+     * Returns { trajectories: [...] }.
+     */
+    async getTrajectoryDescriptions(): Promise<any> {
+        this._ensureReady();
+        return this._rpc('GetUserTrajectoryDescriptions', {});
     }
 
     /**
@@ -259,17 +359,19 @@ export class LSBridge {
     ): Promise<void> {
         const payload: any = {
             cascadeId,
-            items: [{ chunk: { text } }],
+            items: [{ chunk: { case: 'text', value: text } }],
             cascadeConfig: {
                 plannerConfig: {
-                    requestedModel: { model: model || Models.GEMINI_FLASH },
-                } as any,
+                    plannerTypeConfig: {
+                        case: plannerType || 'conversational',
+                        value: {},
+                    },
+                    requestedModel: {
+                        choice: { case: 'model', value: model || Models.GEMINI_FLASH },
+                    },
+                },
             },
         };
-
-        // Set planner type
-        const pt = plannerType || 'conversational';
-        payload.cascadeConfig.plannerConfig[pt] = {};
 
         await this._rpc('SendUserCascadeMessage', payload);
     }

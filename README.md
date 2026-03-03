@@ -219,7 +219,7 @@ await sdk.ls.sendMessage({
 // Focus in UI when ready
 await sdk.ls.focusCascade(cascadeId);
 
-// Or make raw RPC calls to any of the 148 LS methods
+// Or make raw RPC calls to any of the 68 verified LS methods
 const status = await sdk.ls.getUserStatus();
 const cascades = await sdk.ls.listCascades();
 ```

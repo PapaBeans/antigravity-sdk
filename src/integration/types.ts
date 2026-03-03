@@ -204,8 +204,8 @@ export interface IIntegrationManager {
     getRegistered(): ReadonlyArray<IntegrationConfig>;
     /** Generate the integration script from all registered configs */
     build(): string;
-    /** Install the generated script into workbench.html */
-    install(): Promise<void>;
+    /** Install the generated script into workbench.html. Returns true if content changed. */
+    install(): Promise<boolean>;
     /** Remove the integration from workbench.html */
     uninstall(): Promise<void>;
     /** Check if an integration is currently installed */

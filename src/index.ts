@@ -64,13 +64,13 @@ export { Logger, LogLevel } from './core/logger';
 export { CommandBridge, AntigravityCommands } from './transport/command-bridge';
 export { StateBridge, USSKeys } from './transport/state-bridge';
 export { EventMonitor, type IStateChange, type IStepCountChange, type IActiveSessionChange } from './transport/event-monitor';
-export { LSBridge, Models, type ModelId, type IHeadlessCascadeOptions, type ISendMessageOptions } from './transport/ls-bridge';
+export { LSBridge, Models, type ModelId, type IHeadlessCascadeOptions, type ISendMessageOptions, type IConversationAnnotations } from './transport/ls-bridge';
 
 // Cascade
 export { CascadeManager } from './cascade/cascade-manager';
 
 // Integration
-export { IntegrationManager, IntegrationPoint } from './integration';
+export { IntegrationManager, TitleManager, IntegrationPoint } from './integration';
 export type {
     IntegrationConfig,
     IButtonIntegration,

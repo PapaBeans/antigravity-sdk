@@ -3,6 +3,7 @@
  * @module integration
  */
 export { IntegrationManager } from './integration-manager';
+export { TitleManager } from './title-manager';
 export { IntegrationPoint } from './types';
 export type {
     IntegrationConfig,

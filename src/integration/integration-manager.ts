@@ -51,6 +51,8 @@ import {
 } from './types';
 import { ScriptGenerator } from './script-generator';
 import { WorkbenchPatcher } from './workbench-patcher';
+import { TitleManager } from './title-manager';
+import { generateTitleProxyCode } from './title-proxy';
 
 const log = new Logger('IntegrationManager');
 
@@ -70,8 +72,10 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
     private readonly _configs: Map<string, IntegrationConfig> = new Map();
     private readonly _generator = new ScriptGenerator();
     private readonly _patcher = new WorkbenchPatcher();
+    private readonly _titles = new TitleManager();
     private _watcher: fs.FSWatcher | null = null;
     private _autoRepairDebounce: ReturnType<typeof setTimeout> | null = null;
+    private _titleProxyEnabled = false;
 
     // ─── Registration ──────────────────────────────────────────────────
 
@@ -238,41 +242,185 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
         return this;
     }
 
+    // ─── Title Proxy ─────────────────────────────────────────────────
+
+    /**
+     * Enable the title proxy feature.
+     *
+     * Adds renderer-side code that intercepts the summaries provider
+     * and injects custom chat titles. Uses structural matching to find
+     * the provider (obfuscation-safe).
+     *
+     * After enabling, call `install()` or `updateScript()` to apply.
+     *
+     * @example
+     * ```typescript
+     * const sdk = new AntigravitySDK(context);
+     * await sdk.initialize();
+     *
+     * sdk.integration.enableTitleProxy();
+     * await sdk.integration.install();
+     *
+     * // Now rename from extension host:
+     * sdk.integration.titles.rename(cascadeId, 'My Custom Title');
+     * ```
+     */
+    enableTitleProxy(): this {
+        this._titleProxyEnabled = true;
+        if (this._patcher.isAvailable()) {
+            this._titles.initialize(this._patcher.getWorkbenchDir());
+        }
+        log.info('Title proxy enabled');
+        return this;
+    }
+
+    /**
+     * Access the title manager for programmatic title control.
+     *
+     * Requires `enableTitleProxy()` to be called first.
+     *
+     * @example
+     * ```typescript
+     * sdk.integration.titles.rename(cascadeId, 'My Title');
+     * sdk.integration.titles.remove(cascadeId);
+     * const all = sdk.integration.titles.getAll();
+     * ```
+     */
+    get titles(): TitleManager {
+        if (!this._titleProxyEnabled) {
+            log.warn('Title proxy not enabled. Call enableTitleProxy() first.');
+        }
+        return this._titles;
+    }
+
     // ─── Build & Install ───────────────────────────────────────────────
 
     /**
      * Generate the integration script from all registered configs.
      *
+     * If title proxy is enabled, appends the title proxy renderer code.
+     *
      * @returns Complete JavaScript code as a string
      */
     build(): string {
         const configs = Array.from(this._configs.values());
-        if (configs.length === 0) {
-            throw new Error('No integration points registered');
+        if (configs.length === 0 && !this._titleProxyEnabled) {
+            throw new Error('No integration points registered and title proxy not enabled');
         }
-        log.info(`Building script for ${configs.length} integration(s)`);
-        return this._generator.generate(configs);
+
+        let script = '';
+        if (configs.length > 0) {
+            log.info(`Building script for ${configs.length} integration(s)`);
+            script = this._generator.generate(configs);
+        }
+
+        if (this._titleProxyEnabled) {
+            log.info('Appending title proxy code');
+            script += '\n' + generateTitleProxyCode();
+        }
+
+        return script;
     }
 
     /**
      * Install the generated script into workbench.html.
      *
-     * ⚠️ Requires Antigravity restart to take effect.
-     * ⚠️ Will be overwritten by Antigravity updates (use enableAutoRepair).
+     * For seamless hot-reload behavior, use `installSeamless()` instead.
+     *
+     * @returns true if the script content actually changed on disk
      */
-    async install(): Promise<void> {
+    async install(): Promise<boolean> {
         if (!this._patcher.isAvailable()) {
             throw new Error('Antigravity workbench not found. Is Antigravity installed?');
         }
 
         const script = this.build();
+
+        // Read existing script to detect changes
+        const scriptPath = this._patcher.getScriptPath();
+        let oldContent = '';
+        try {
+            if (fs.existsSync(scriptPath)) {
+                oldContent = fs.readFileSync(scriptPath, 'utf8');
+            }
+        } catch { /* ignore */ }
+
         this._patcher.install(script);
         this._patcher.writeHeartbeat();
 
+        const changed = oldContent !== script;
         log.info(
-            `Installed integration (${this._configs.size} points) -> ${this._patcher.getScriptPath()}`,
+            `Installed integration (${this._configs.size} points, titleProxy: ${this._titleProxyEnabled}) -> ${scriptPath} [${changed ? 'CHANGED' : 'unchanged'}]`,
         );
-        log.info('Restart Antigravity to apply changes');
+
+        return changed;
+    }
+
+    /**
+     * Seamless install — handles everything automatically.
+     *
+     * This is the **recommended** install method for extension developers.
+     * It handles the entire lifecycle:
+     *
+     * 1. **First install:** Writes script + patches HTML + prompts user to reload
+     * 2. **Update:** Compares content, if changed → auto-reloads window (no prompt)
+     * 3. **No change:** Does nothing
+     *
+     * The developer never needs to think about reload.
+     *
+     * @param executeCommand - Function to execute VS Code commands
+     *   (pass `vscode.commands.executeCommand` or equivalent)
+     *
+     * @example
+     * ```typescript
+     * const sdk = new AntigravitySDK(context);
+     * await sdk.initialize();
+     *
+     * sdk.integration.enableTitleProxy();
+     * // That's it. SDK handles install, reload, everything.
+     * await sdk.integration.installSeamless(
+     *   (cmd) => vscode.commands.executeCommand(cmd),
+     *   (msg, ...items) => vscode.window.showInformationMessage(msg, ...items),
+     * );
+     * ```
+     */
+    async installSeamless(
+        executeCommand: (command: string) => Thenable<any>,
+        showMessage?: (message: string, ...items: string[]) => Thenable<string | undefined>,
+    ): Promise<void> {
+        const wasInstalled = this._patcher.isInstalled();
+
+        // Snapshot old content before install
+        const scriptPath = this._patcher.getScriptPath();
+        let oldContent = '';
+        try {
+            if (fs.existsSync(scriptPath)) {
+                oldContent = fs.readFileSync(scriptPath, 'utf8');
+            }
+        } catch { /* ignore */ }
+
+        const changed = await this.install();
+
+        if (!wasInstalled) {
+            // First install: prompt user
+            log.info('First install. Prompting for reload.');
+            if (showMessage) {
+                const action = await showMessage(
+                    'Better Antigravity installed. Reload to activate.',
+                    'Reload Now',
+                );
+                if (action === 'Reload Now') {
+                    await executeCommand('workbench.action.reloadWindow');
+                }
+            }
+        } else if (changed) {
+            // Update: auto-reload (no prompt)
+            log.info('Script changed on disk. Auto-reloading window...');
+            // Small delay to let extension finish activation
+            setTimeout(() => executeCommand('workbench.action.reloadWindow'), 500);
+        } else {
+            log.debug('Script unchanged. No reload needed.');
+        }
     }
 
     /**
@@ -531,5 +679,6 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
     dispose(): void {
         this.disableAutoRepair();
         this._configs.clear();
+        this._titles.dispose();
     }
 }
