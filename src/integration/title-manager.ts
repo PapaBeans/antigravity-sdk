@@ -48,9 +48,10 @@ export class TitleManager implements IDisposable {
      * Initialize with the workbench directory path.
      *
      * @param workbenchDir - Path to workbench directory where data file is stored
+     * @param namespace - Extension namespace for file isolation
      */
-    initialize(workbenchDir: string): void {
-        this._dataPath = path.join(workbenchDir, getTitlesDataFile());
+    initialize(workbenchDir: string, namespace: string = 'default'): void {
+        this._dataPath = path.join(workbenchDir, getTitlesDataFile(namespace));
         this._load();
         this._initialized = true;
         log.info(`Initialized, ${Object.keys(this._titles).length} custom titles loaded`);

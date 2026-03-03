@@ -13,11 +13,11 @@
  * @internal
  */
 
-/** localStorage key for custom titles */
-const TITLES_STORAGE_KEY = 'ag-sdk-titles';
+/** localStorage key prefix for custom titles */
+const TITLES_STORAGE_PREFIX = 'ag-sdk-titles';
 
-/** Data file for extension-host to set titles */
-const TITLES_DATA_FILE = 'ag-sdk-titles.json';
+/** Data file prefix for extension-host to set titles */
+const TITLES_DATA_PREFIX = 'ag-sdk-titles';
 
 /**
  * Generate the renderer-side title proxy JavaScript.
@@ -33,7 +33,10 @@ const TITLES_DATA_FILE = 'ag-sdk-titles.json';
  * @param dataFilePath - Relative path to the JSON data file (for extension-host titles)
  * @returns JavaScript source code
  */
-export function generateTitleProxyCode(dataFilePath: string = `./${TITLES_DATA_FILE}`): string {
+export function generateTitleProxyCode(namespace: string = 'default'): string {
+  const slug = namespace.replace(/[^a-zA-Z0-9-]/g, '-');
+  const storageKey = `${TITLES_STORAGE_PREFIX}-${slug}`;
+  const dataFile = `./${TITLES_DATA_PREFIX}-${slug}.json`;
   return `
 // ── AG SDK: Title Proxy ──────────────────────────────────────────
 // Intercepts summaries provider to inject custom chat titles.
@@ -42,8 +45,8 @@ export function generateTitleProxyCode(dataFilePath: string = `./${TITLES_DATA_F
 (function initTitleProxy(){
   var PANEL_SEL='.antigravity-agent-side-panel';
   var TITLE_SEL='.flex.min-w-0.items-center.overflow-hidden';
-  var STORAGE_KEY='${TITLES_STORAGE_KEY}';
-  var DATA_FILE='${dataFilePath}';
+  var STORAGE_KEY='${storageKey}';
+  var DATA_FILE='${dataFile}';
   
   var _provider=null;
   var _origGetState=null;
@@ -270,8 +273,9 @@ export function generateTitleProxyCode(dataFilePath: string = `./${TITLES_DATA_F
 /**
  * Get the data file name for extension-host titles.
  */
-export function getTitlesDataFile(): string {
-  return TITLES_DATA_FILE;
+export function getTitlesDataFile(namespace: string = 'default'): string {
+  const slug = namespace.replace(/[^a-zA-Z0-9-]/g, '-');
+  return `${TITLES_DATA_PREFIX}-${slug}.json`;
 }
 
 /**

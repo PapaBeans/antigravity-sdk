@@ -12,15 +12,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** Marker comment used to identify our integrations */
-const MARKER_START = '<!-- X-Ray SDK Integration -->';
-const MARKER_END = '<!-- /X-Ray SDK Integration -->';
-
-/** Default script filename */
-const SCRIPT_FILENAME = 'ag-sdk-integrate.js';
-
-/** Heartbeat marker filename */
-const HEARTBEAT_FILENAME = 'ag-sdk-heartbeat';
+/** Default prefix for generated files */
+const FILE_PREFIX = 'ag-sdk';
 
 /**
  * Manages patching/unpatching of Antigravity's workbench.html.
@@ -31,7 +24,15 @@ export class WorkbenchPatcher {
     private readonly _scriptPath: string;
     private readonly _heartbeatPath: string;
 
-    constructor() {
+    private readonly _markerStart: string;
+    private readonly _markerEnd: string;
+
+    /**
+     * @param namespace - Unique slug for this extension (e.g. 'kanezal-better-antigravity').
+     *   Used to namespace all generated files and HTML markers so multiple
+     *   SDK-based extensions can coexist without conflicts.
+     */
+    constructor(namespace: string = 'default') {
         // Resolve Antigravity install path
         const appData = process.env.LOCALAPPDATA || '';
         this._workbenchDir = path.join(
@@ -47,8 +48,12 @@ export class WorkbenchPatcher {
             'workbench',
         );
         this._workbenchHtml = path.join(this._workbenchDir, 'workbench.html');
-        this._scriptPath = path.join(this._workbenchDir, SCRIPT_FILENAME);
-        this._heartbeatPath = path.join(this._workbenchDir, HEARTBEAT_FILENAME);
+
+        const slug = namespace.replace(/[^a-zA-Z0-9-]/g, '-');
+        this._scriptPath = path.join(this._workbenchDir, `${FILE_PREFIX}-${slug}.js`);
+        this._heartbeatPath = path.join(this._workbenchDir, `${FILE_PREFIX}-${slug}-heartbeat`);
+        this._markerStart = `<!-- AG SDK [${slug}] -->`;
+        this._markerEnd = `<!-- /AG SDK [${slug}] -->`;
     }
 
     /**
@@ -65,7 +70,7 @@ export class WorkbenchPatcher {
         if (!this.isAvailable()) return false;
         try {
             const content = fs.readFileSync(this._workbenchHtml, 'utf8');
-            return content.includes(MARKER_START);
+            return content.includes(this._markerStart);
         } catch {
             return false;
         }
@@ -84,7 +89,7 @@ export class WorkbenchPatcher {
             throw new Error(`Workbench not found at: ${this._workbenchDir}`);
         }
 
-        // First uninstall any previous integration
+        // First uninstall any previous integration for THIS namespace
         if (this.isInstalled()) {
             this.uninstall();
         }
@@ -96,10 +101,11 @@ export class WorkbenchPatcher {
         let html = fs.readFileSync(this._workbenchHtml, 'utf8');
 
         // Insert before </html>
+        const scriptBasename = path.basename(this._scriptPath);
         const scriptTag = [
-            MARKER_START,
-            `<script src="./${SCRIPT_FILENAME}"></script>`,
-            MARKER_END,
+            this._markerStart,
+            `<script src="./${scriptBasename}"></script>`,
+            this._markerEnd,
         ].join('\n');
 
         html = html.replace('</html>', `${scriptTag}\n</html>`);
@@ -119,7 +125,7 @@ export class WorkbenchPatcher {
         try {
             let html = fs.readFileSync(this._workbenchHtml, 'utf8');
             const regex = new RegExp(
-                `\\n?${escapeRegex(MARKER_START)}[\\s\\S]*?${escapeRegex(MARKER_END)}\\n?`,
+                `\\n?${escapeRegex(this._markerStart)}[\\s\\S]*?${escapeRegex(this._markerEnd)}\\n?`,
                 'g',
             );
             html = html.replace(regex, '');

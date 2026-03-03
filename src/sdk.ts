@@ -117,16 +117,20 @@ export class AntigravitySDK implements IDisposable {
             Logger.setLevel(LogLevel.Debug);
         }
 
+        // Derive namespace from extension ID for file isolation
+        // e.g. 'kanezal.better-antigravity' -> 'kanezal-better-antigravity'
+        const namespace = this._context.extension.id.replace(/\./g, '-');
+
         this.commands = this._disposables.add(new CommandBridge());
         this.state = this._disposables.add(new StateBridge());
         this.cascade = this._disposables.add(new CascadeManager(this.commands, this.state));
         this.monitor = this._disposables.add(new EventMonitor(this.state));
-        this.integration = this._disposables.add(new IntegrationManager());
+        this.integration = this._disposables.add(new IntegrationManager(namespace));
         this.ls = new LSBridge(
             <T = any>(cmd: string, ...args: any[]) => Promise.resolve(vscode.commands.executeCommand<T>(cmd, ...args))
         );
 
-        log.info('SDK created');
+        log.info(`SDK created (namespace: ${namespace})`);
     }
 
     /**
@@ -181,7 +185,7 @@ export class AntigravitySDK implements IDisposable {
      * Get the SDK version.
      */
     get version(): string {
-        return '1.3.1';
+        return '1.4.0';
     }
 
     /**

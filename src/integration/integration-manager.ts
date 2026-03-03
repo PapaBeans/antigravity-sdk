@@ -71,11 +71,22 @@ const log = new Logger('IntegrationManager');
 export class IntegrationManager implements IIntegrationManager, IDisposable {
     private readonly _configs: Map<string, IntegrationConfig> = new Map();
     private readonly _generator = new ScriptGenerator();
-    private readonly _patcher = new WorkbenchPatcher();
+    private readonly _patcher: WorkbenchPatcher;
     private readonly _titles = new TitleManager();
+    private readonly _namespace: string;
     private _watcher: fs.FSWatcher | null = null;
     private _autoRepairDebounce: ReturnType<typeof setTimeout> | null = null;
     private _titleProxyEnabled = false;
+
+    /**
+     * @param namespace - Unique slug that isolates this extension's files.
+     *   Derived automatically from `context.extension.id` when using AntigravitySDK.
+     *   Multiple SDK-based extensions can coexist without conflicts.
+     */
+    constructor(namespace: string = 'default') {
+        this._namespace = namespace;
+        this._patcher = new WorkbenchPatcher(namespace);
+    }
 
     // ─── Registration ──────────────────────────────────────────────────
 
@@ -268,7 +279,7 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
     enableTitleProxy(): this {
         this._titleProxyEnabled = true;
         if (this._patcher.isAvailable()) {
-            this._titles.initialize(this._patcher.getWorkbenchDir());
+            this._titles.initialize(this._patcher.getWorkbenchDir(), this._namespace);
         }
         log.info('Title proxy enabled');
         return this;
@@ -316,7 +327,7 @@ export class IntegrationManager implements IIntegrationManager, IDisposable {
 
         if (this._titleProxyEnabled) {
             log.info('Appending title proxy code');
-            script += '\n' + generateTitleProxyCode();
+            script += '\n' + generateTitleProxyCode(this._namespace);
         }
 
         return script;
